@@ -833,6 +833,7 @@ async fn process_evaluation(
     .bind(evaluator)
     .bind(report_line)
     .bind(cheat)
+    .bind(eval.eval_id)
     .execute(db)
     .await?;
     Ok(())

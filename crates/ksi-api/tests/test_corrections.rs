@@ -186,7 +186,7 @@ async fn correction_get_single_and_404() {
     assert_eq!(body["correction"]["modules"][0]["evaluation"]["eval_id"], eval_id);
 
     // no evaluations for this (task, user) -> 404
-    app.auth_get(&format!("/admin/corrections/{}", 99999 * 100000 + 1), true)
+    app.auth_get(&format!("/admin/corrections/{}", 99999i64 * 100000 + 1), true)
         .await
         .assert_status(axum::http::StatusCode::NOT_FOUND);
 }
