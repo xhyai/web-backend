@@ -2,6 +2,7 @@ pub mod admin;
 pub mod articles;
 pub mod auth;
 pub mod posts;
+pub mod registration;
 pub mod tasks;
 pub mod threads;
 pub mod waves;
@@ -35,6 +36,12 @@ pub fn router() -> Router<SharedState> {
         // tasks
         .route("/tasks", get(tasks::list_tasks))
         .route("/tasks/:id", get(tasks::get_task))
+        // registration
+        .route("/registration", axum::routing::post(registration::register))
+        .route(
+            "/forgottenPassword",
+            axum::routing::post(registration::forgotten_password),
+        )
         // admin
         .route("/admin/subm/task/:id", get(admin::subm_files_task))
         // misc
