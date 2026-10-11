@@ -24,6 +24,98 @@ pub struct PostResponse {
     post: PostJson,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdatePostBody {
+    post: UpdatePostInput,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdatePostInput {
+    body: String,
+}
+
+/// `PUT /posts/{id}` — update a post's body. Author or org only.
+///
+/// Python quirks ported faithfully: when the caller is not logged in, or is
+/// logged in but is neither an org nor the author, the endpoint behaves
+/// like `GET /posts/{id}` ("Toto tady musi byt — jinak nefunguje
+/// frontend.").
+pub async fn update_post(
+    State(state): State<SharedState>,
+    user: AuthUser,
+    Path(id): Path<i64>,
+    Json(body): Json<UpdatePostBody>,
+) -> ApiResult<Json<PostResponse>> {
+    if !user.is_logged_in() {
+        return get_post(State(state), user, Path(id)).await;
+    }
+
+    if body.post.body.chars().count() > MAX_POST_LEN {
+        return Err(ApiError::PayloadTooLarge(
+            "Tělo příspěvku může mít maximálně 8000 znaků.".into(),
+        ));
+    }
+
+    let post: Option<Post> = sqlx::query_as(
+        "SELECT id, thread, author, body, published_at, parent, resolved_at
+         FROM posts WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?;
+    let post = match post {
+        None => return Err(ApiError::NotFound("Příspěvek neexistuje.".into())),
+        Some(p) => p,
+    };
+
+    if !user.is_org() && post.author != user.id.unwrap() {
+        return get_post(State(state), user, Path(id)).await;
+    }
+
+    sqlx::query("UPDATE posts SET body = ? WHERE id = ?")
+        .bind(&body.post.body)
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+
+    get_post(State(state), user, Path(id)).await
+}
+
+/// `DELETE /posts/{id}` — delete a post. Author or org only.
+pub async fn delete_post(
+    State(state): State<SharedState>,
+    user: AuthUser,
+    Path(id): Path<i64>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if !user.is_logged_in() {
+        return Err(ApiError::BadRequest("Nejste přihlášeni.".into()));
+    }
+
+    let post: Option<Post> = sqlx::query_as(
+        "SELECT id, thread, author, body, published_at, parent, resolved_at
+         FROM posts WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?;
+    let post = match post {
+        None => return Err(ApiError::NotFound("Příspěvek neexistuje.".into())),
+        Some(p) => p,
+    };
+
+    if !user.is_org() && post.author != user.id.unwrap() {
+        return Err(ApiError::Forbidden(
+            "Smazat příspěvek může pouze jeho autor nebo organizátor.".into(),
+        ));
+    }
+
+    sqlx::query("DELETE FROM posts WHERE id = ?")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+    Ok(Json(serde_json::json!({})))
+}
+
 pub async fn get_post(
     State(state): State<SharedState>,
     _user: AuthUser,
@@ -58,12 +150,11 @@ pub struct NewPost {
     parent: Option<i64>,
 }
 
-/// `POST /posts` — create a post. Implements the #182 auto-resolve rules:
-/// an org's reply marks the parent resolved; a participant's reply to a
-/// resolved post reopens it.
+/// `POST /posts` — create a post. An org's reply marks the parent as
+/// resolved; a participant's reply to a resolved post reopens it.
 pub async fn create_post(
     State(state): State<SharedState>,
-    _user: AuthUser,
+    user: AuthUser,
     Json(body): Json<CreatePostBody>,
 ) -> ApiResult<Json<PostResponse>> {
     if !user.is_logged_in() {
@@ -113,7 +204,7 @@ pub async fn create_post(
     .await?;
     let post_id = res.last_insert_rowid();
 
-    // #182 auto-resolve hook
+    // auto-resolve hook
     if let Some(parent_id) = body.post.parent {
         if user.is_org() {
             sqlx::query("UPDATE posts SET resolved_at = ? WHERE id = ?")
@@ -145,7 +236,7 @@ pub async fn create_post(
 /// `POST /posts/{id}/resolve` — manually mark a post resolved (org only).
 pub async fn resolve_post(
     State(state): State<SharedState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<PostResponse>> {
     if !user.is_logged_in() || !user.is_org() {
@@ -180,7 +271,7 @@ pub async fn resolve_post(
 /// `DELETE /posts/{id}/resolve` — manually reopen a post (org only).
 pub async fn unresolve_post(
     State(state): State<SharedState>,
-    _user: AuthUser,
+    user: AuthUser,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<PostResponse>> {
     if !user.is_logged_in() || !user.is_org() {

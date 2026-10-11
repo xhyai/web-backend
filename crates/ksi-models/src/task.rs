@@ -36,3 +36,27 @@ pub struct TaskJson {
     pub wave: i64,
     pub feedbacks: i64,
 }
+
+/// Admin task JSON (mirrors `util/admin/task.py::admin_to_json`).
+///
+/// `testers` / `additional_testers` are only populated when the caller asks
+/// for them (`?fetch_testers=true`); the Rust port does not call the GitHub
+/// API, so they stay empty.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AdminTaskJson {
+    pub id: i64,
+    pub title: String,
+    pub wave: i64,
+    pub author: Option<i64>,
+    pub co_author: Option<i64>,
+    pub testers: Vec<i64>,
+    pub git_path: Option<String>,
+    pub git_branch: Option<String>,
+    pub git_commit: Option<String>,
+    pub git_pull_id: Option<i64>,
+    pub deploy_date: Option<String>,
+    pub deploy_status: String,
+    pub max_score: f64,
+    pub eval_comment: Option<String>,
+    pub additional_testers: Vec<String>,
+}

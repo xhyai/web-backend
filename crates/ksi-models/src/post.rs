@@ -15,7 +15,7 @@ pub struct Post {
     pub resolved_at: Option<NaiveDateTime>,
 }
 
-/// Post JSON (mirrors `util/post.py::to_json`, incl. the #182 `resolved_at`).
+/// Post JSON as returned by the API (includes `resolved_at`).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PostJson {
     pub id: i64,

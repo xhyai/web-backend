@@ -25,18 +25,18 @@ pub struct TaskJson {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-struct TaskRow {
-    id: i64,
-    title: String,
-    author: Option<i64>,
-    co_author: Option<i64>,
-    wave: i64,
-    intro: String,
-    time_deadline: Option<chrono::NaiveDateTime>,
-    picture_base: Option<String>,
+pub(crate) struct TaskRow {
+    pub(crate) id: i64,
+    pub(crate) title: String,
+    pub(crate) author: Option<i64>,
+    pub(crate) co_author: Option<i64>,
+    pub(crate) wave: i64,
+    pub(crate) intro: String,
+    pub(crate) time_deadline: Option<chrono::NaiveDateTime>,
+    pub(crate) picture_base: Option<String>,
 }
 
-async fn wave_published(db: &sqlx::SqlitePool, wave_id: i64) -> Option<chrono::NaiveDateTime> {
+pub(crate) async fn wave_published(db: &sqlx::SqlitePool, wave_id: i64) -> Option<chrono::NaiveDateTime> {
     sqlx::query_scalar::<_, Option<chrono::NaiveDateTime>>(
         "SELECT time_published FROM waves WHERE id = ?",
     )
@@ -59,7 +59,7 @@ async fn max_points(db: &sqlx::SqlitePool, task_id: i64) -> f64 {
     sum.unwrap_or(0.0)
 }
 
-async fn task_to_json(
+pub(crate) async fn task_to_json(
     db: &sqlx::SqlitePool,
     row: &TaskRow,
     wave_published: Option<chrono::NaiveDateTime>,

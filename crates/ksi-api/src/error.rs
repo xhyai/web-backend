@@ -28,6 +28,12 @@ pub enum ApiError {
     Forbidden(String),
     NotFound(String),
     PayloadTooLarge(String),
+    /// 409 — a git operation is already in progress (git lock held).
+    Conflict(String),
+    /// 503 — a backend capability (e.g. the `isolate` sandbox) is unavailable.
+    ServiceUnavailable(String),
+    /// 411 — `POST /content` requires a `Content-Length` header.
+    LengthRequired,
     Internal(String),
 }
 
@@ -39,6 +45,9 @@ impl ApiError {
             ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
             ApiError::NotFound(_) => StatusCode::NOT_FOUND,
             ApiError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+            ApiError::Conflict(_) => StatusCode::CONFLICT,
+            ApiError::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            ApiError::LengthRequired => StatusCode::LENGTH_REQUIRED,
             ApiError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -50,6 +59,9 @@ impl ApiError {
             ApiError::Forbidden(_) => "Forbidden",
             ApiError::NotFound(_) => "Not Found",
             ApiError::PayloadTooLarge(_) => "Payload Too Large",
+            ApiError::Conflict(_) => "Conflict",
+            ApiError::ServiceUnavailable(_) => "Service Unavailable",
+            ApiError::LengthRequired => "Length Required",
             ApiError::Internal(_) => "Internal Server Error",
         }
     }
@@ -61,7 +73,10 @@ impl ApiError {
             | ApiError::Forbidden(d)
             | ApiError::NotFound(d)
             | ApiError::PayloadTooLarge(d)
+            | ApiError::Conflict(d)
+            | ApiError::ServiceUnavailable(d)
             | ApiError::Internal(d) => d,
+            ApiError::LengthRequired => "Chybí hlavička Content-Length.",
         }
     }
 }

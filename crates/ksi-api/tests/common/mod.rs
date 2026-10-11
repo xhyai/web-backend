@@ -177,6 +177,7 @@ impl TestApp {
             database_url: "sqlite::memory:".into(),
             listen_addr: "127.0.0.1:0".into(),
             cors_origin: None,
+            discord_invite_link: Some("https://discord.gg/test-invite".into()),
         };
         let state = Arc::new(AppState { db: db.clone(), config });
         let app = create_app(state).await;
@@ -217,6 +218,45 @@ impl TestApp {
         self.server
             .delete(path)
             .add_header("Authorization", format!("Bearer {token}"))
+    }
+
+    pub fn auth_put(&self, path: &str, org: bool) -> axum_test::TestRequest {
+        let token = if org { &self.tokens.0 } else { &self.tokens.1 };
+        self.server
+            .put(path)
+            .add_header("Authorization", format!("Bearer {token}"))
+    }
+
+    /// Authenticated request with an explicit bearer token.
+    /// `method` is one of "get", "post", "put", "delete".
+    pub fn authed(&self, method: &str, path: &str, token: &str) -> axum_test::TestRequest {
+        let req = match method {
+            "get" => self.server.get(path),
+            "post" => self.server.post(path),
+            "put" => self.server.put(path),
+            "delete" => self.server.delete(path),
+            _ => panic!("unknown method {method}"),
+        };
+        req.add_header("Authorization", format!("Bearer {token}"))
+    }
+
+    /// Insert a user with the given role and return `(user_id, token)`.
+    pub async fn add_user(&self, role: &str) -> (i64, String) {
+        let pw = bcrypt::hash("demo", 4).unwrap();
+        let email = format!("{}-{}@demo.cz", role, uuid::Uuid::new_v4().simple());
+        let id: i64 = sqlx::query_scalar(
+            "INSERT INTO users (email, first_name, last_name, nick_name, sex, password, short_info, role)
+             VALUES (?, 'Test', 'User', NULL, 'male', ?, '', ?)
+             RETURNING id",
+        )
+        .bind(&email)
+        .bind(&pw)
+        .bind(role)
+        .fetch_one(&self.db)
+        .await
+        .unwrap();
+        let token = make_token(&self.db, id).await;
+        (id, token)
     }
 }
 

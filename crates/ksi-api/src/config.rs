@@ -9,6 +9,9 @@ pub struct Config {
     pub listen_addr: String,
     /// Value for the `Access-Control-Allow-Origin` header (optional)
     pub cors_origin: Option<String>,
+    /// Discord invite link served by `GET /users/{id}/discord`
+    /// (mirrors `util/config.py::discord_invite_link()`).
+    pub discord_invite_link: Option<String>,
 }
 
 impl Config {
@@ -19,6 +22,7 @@ impl Config {
             listen_addr: env::var("LISTEN_ADDR")
                 .unwrap_or_else(|_| "127.0.0.1:3030".to_string()),
             cors_origin: env::var("CORS_ORIGIN").ok(),
+            discord_invite_link: env::var("DISCORD_INVITE_LINK").ok(),
         }
     }
 }

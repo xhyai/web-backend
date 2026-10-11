@@ -6,6 +6,7 @@ members = [
     "crates/ksi-auth",
     "crates/ksi-api",
     "crates/ksi-backend",
+    "crates/ksi-sandbox",
 ]
 
 [workspace.package]
@@ -17,7 +18,7 @@ repository = "https://github.com/fi-ksi/web-backend"
 
 # Centralized dependency versions (like Modrinth's [workspace.dependencies]).
 [workspace.dependencies]
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.7", features = ["macros", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -30,8 +31,13 @@ bcrypt = "0.15"
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 anyhow = "1"
+mime_guess = "2"
+infer = "0.19"
+rand = "0.8"
+sha2 = "0.10"
 
 ksi-models = { path = "crates/ksi-models" }
 ksi-db = { path = "crates/ksi-db" }
 ksi-auth = { path = "crates/ksi-auth" }
 ksi-api = { path = "crates/ksi-api" }
+ksi-sandbox = { path = "crates/ksi-sandbox" }
