@@ -351,7 +351,8 @@ pub async fn get_evaluation(
     }
 
     let evaluation: Option<Evaluation> = sqlx::query_as(
-        "SELECT id, user, module, evaluator, points, ok, cheat, full_report, time
+        "SELECT id, user, module, evaluator, CAST(points AS REAL) AS points, ok, cheat,
+                full_report, time
          FROM evaluations WHERE id = ?",
     )
     .bind(id)
@@ -404,7 +405,7 @@ pub async fn get_evaluation(
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub(crate) struct ExecsQuery {
+pub struct ExecsQuery {
     user: Option<i64>,
     module: Option<i64>,
     limit: Option<i64>,
@@ -549,7 +550,7 @@ pub async fn get_instance_config(
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct InstanceConfigBody {
+pub struct InstanceConfigBody {
     key: Option<String>,
     value: Option<Value>,
 }
@@ -707,7 +708,7 @@ pub async fn user_export(
                 p.addr_street, p.addr_city, p.addr_zip, p.addr_country,
                 p.school_name, p.school_street, p.school_city, p.school_zip, p.school_country,
                 p.school_finish, p.tshirt_size,
-                SUM(pu.points) AS total_score, tp.tasks_cnt AS tasks_cnt, MAX(pu.cheat) AS cheat
+                CAST(SUM(pu.points) AS REAL) AS total_score, tp.tasks_cnt AS tasks_cnt, MAX(pu.cheat) AS cheat
          FROM users u
          JOIN (SELECT e.user AS user_id, e.module AS module_id,
                       MAX(e.points) AS points, MAX(e.cheat) AS cheat
@@ -748,7 +749,7 @@ pub async fn user_export(
         .partition(|r| r.school_finish >= year_end);
 
     let sum_points_real: f64 = sqlx::query_scalar::<_, Option<f64>>(
-        "SELECT SUM(m.max_points) FROM modules m
+        "SELECT CAST(SUM(m.max_points) AS REAL) FROM modules m
          JOIN tasks t ON t.id = m.task
          JOIN waves w ON w.id = t.wave
          WHERE w.year = ? AND m.bonus = 0",
@@ -759,7 +760,7 @@ pub async fn user_export(
     .flatten()
     .unwrap_or(0.0);
     let sum_points_bonus_real: f64 = sqlx::query_scalar::<_, Option<f64>>(
-        "SELECT SUM(m.max_points) FROM modules m
+        "SELECT CAST(SUM(m.max_points) AS REAL) FROM modules m
          JOIN tasks t ON t.id = m.task
          JOIN waves w ON w.id = t.wave
          WHERE w.year = ?",

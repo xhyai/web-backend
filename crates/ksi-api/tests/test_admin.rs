@@ -450,15 +450,25 @@ async fn admin_user_export() {
     .execute(&app.db)
     .await
     .unwrap();
-    // evaluation with 8 points on the public task's module
-    sqlx::query(
-        "INSERT INTO evaluations (user, module, points, cheat, full_report) VALUES (?, ?, 8, 0, '')",
+    // evaluations with 8 points on each of the year's two modules
+    // (16 of 20 total -> above the 60% successful threshold)
+    let module2: i64 = sqlx::query_scalar(
+        "SELECT m.id FROM modules m JOIN tasks t ON t.id = m.task WHERE t.wave = ?",
     )
-    .bind(app.ids.participant)
-    .bind(app.ids.module)
-    .execute(&app.db)
+    .bind(app.ids.wave_hidden)
+    .fetch_one(&app.db)
     .await
     .unwrap();
+    for module in [app.ids.module, module2] {
+        sqlx::query(
+            "INSERT INTO evaluations (user, module, points, cheat, full_report) VALUES (?, ?, 8, 0, '')",
+        )
+        .bind(app.ids.participant)
+        .bind(module)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    }
 
     let resp = app
         .server
@@ -480,11 +490,11 @@ async fn admin_user_export() {
     assert!(body.contains("Pořadí;Příjmení;Jméno;Body;"));
     assert!(body.contains("Ticipant"));
     assert!(body.contains("Par"));
-    // 8 points, threshold is 60% of 10 -> successful ('A'), no cheat
+    // 16 points, threshold is 60% of 20 -> successful ('A'), no cheat
     let row = body.lines().find(|l| l.contains("Ticipant")).unwrap();
     let cols: Vec<&str> = row.split(';').collect();
     assert_eq!(cols[0], "1"); // rank
-    assert_eq!(cols[3], "8.0"); // points
+    assert_eq!(cols[3], "16.0"); // points
     assert_eq!(cols[4], "A"); // successful
     assert_eq!(cols[5], "N"); // cheat
 

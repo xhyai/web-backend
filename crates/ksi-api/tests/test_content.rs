@@ -37,16 +37,20 @@ fn cleanup(dir: &std::path::Path) {
     }
 }
 
+/// Path of `path` relative to `<crate>/data/content` (what `GET /content`
+/// expects in the `path` query parameter).
 fn rel_to_data(path: &std::path::Path) -> String {
-    path.strip_prefix(std::env::current_dir().unwrap().join("data"))
-        .unwrap()
-        .to_string_lossy()
-        .replace('\\', "/")
+    path.strip_prefix(
+        std::env::current_dir().unwrap().join("data").join("content"),
+    )
+    .unwrap()
+    .to_string_lossy()
+    .replace('\\', "/")
 }
 
 #[tokio::test]
 async fn content_dir_listing() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let dir = scratch("content");
     std::fs::create_dir_all(dir.join("subdir")).unwrap();
@@ -67,7 +71,7 @@ async fn content_dir_listing() {
 
 #[tokio::test]
 async fn content_serve_file() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let dir = scratch("content");
     std::fs::write(dir.join("hello.txt"), b"hello content").unwrap();
@@ -79,14 +83,14 @@ async fn content_serve_file() {
         resp.headers().get("content-type").unwrap(),
         "text/plain"
     );
-    assert_eq!(resp.as_bytes(), b"hello content");
+    assert_eq!(resp.as_bytes().as_ref(), b"hello content");
 
     cleanup(&dir);
 }
 
 #[tokio::test]
 async fn content_missing_file_returns_empty_listing() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let resp = app
         .server
@@ -106,7 +110,7 @@ async fn content_missing_file_returns_empty_listing() {
 
 #[tokio::test]
 async fn content_absolute_path_outside_box_is_404() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     // `..` is stripped, but an absolute path still escapes the box
     let resp = app.server.get("/content?path=/etc/passwd").await;
@@ -115,7 +119,7 @@ async fn content_absolute_path_outside_box_is_404() {
 
 #[tokio::test]
 async fn content_post_requires_org() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     app.auth_post("/content?path=x", false)
         .await
@@ -132,7 +136,7 @@ fn multipart_body(boundary: &str, filename: &str, data: &str) -> String {
 
 #[tokio::test]
 async fn content_post_upload_then_delete() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let dir = scratch("content");
     let rel = rel_to_data(&dir);
@@ -162,7 +166,7 @@ async fn content_post_upload_then_delete() {
     let file_rel = rel_to_data(&dir.join("up.txt"));
     let resp = app.server.get(&format!("/content?path={file_rel}")).await;
     resp.assert_status_ok();
-    assert_eq!(resp.as_bytes(), b"uploaded!");
+    assert_eq!(resp.as_bytes().as_ref(), b"uploaded!");
 
     // delete as org
     let resp = app
@@ -186,7 +190,7 @@ async fn content_post_upload_then_delete() {
 
 #[tokio::test]
 async fn content_post_requires_content_length() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     // axum-test always sets Content-Length for .bytes(), so exercise the
     // 411 path through a raw check is impractical here; instead verify a
@@ -213,7 +217,7 @@ async fn content_post_requires_content_length() {
 
 #[tokio::test]
 async fn image_profile() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let dir = scratch("profile");
     // minimal PNG header
@@ -233,7 +237,7 @@ async fn image_profile() {
         .await;
     resp.assert_status_ok();
     assert_eq!(resp.headers().get("content-type").unwrap(), "image/png");
-    assert_eq!(resp.as_bytes(), png);
+    assert_eq!(resp.as_bytes().as_ref(), png);
 
     // user without a picture -> 404
     app.server
@@ -251,7 +255,7 @@ async fn image_profile() {
 
 #[tokio::test]
 async fn image_code_execution() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let exec_id: i64 = sqlx::query_scalar(
         "INSERT INTO code_executions (module, user, code, result, report) VALUES (?, ?, 'print(1)', 'ok', '') RETURNING id",
@@ -277,7 +281,7 @@ async fn image_code_execution() {
         .get(&format!("/images/codeExecution/{exec_id}?file=out.png"))
         .await;
     resp.assert_status_ok();
-    assert_eq!(resp.as_bytes(), b"pngdata");
+    assert_eq!(resp.as_bytes().as_ref(), b"pngdata");
 
     // missing file param -> 400
     app.server
@@ -296,7 +300,7 @@ async fn image_code_execution() {
 
 #[tokio::test]
 async fn image_code_module() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let dir = scratch("exec");
     let exec_dir = dir
@@ -336,7 +340,7 @@ async fn image_code_module() {
 
 #[tokio::test]
 async fn task_content_serve() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let dir = scratch("task-content");
     let view_dir = dir
@@ -350,7 +354,7 @@ async fn task_content_serve() {
     let url = format!("/task-content/{}/zadani?path=a.txt", app.ids.task);
     let resp = app.server.get(&url).await;
     resp.assert_status_ok();
-    assert_eq!(resp.as_bytes(), b"zadani text");
+    assert_eq!(resp.as_bytes().as_ref(), b"zadani text");
 
     // legacy route
     let url = format!("/taskContent/{}/zadani?path=a.txt", app.ids.task);
@@ -390,7 +394,7 @@ async fn task_content_serve() {
 
 #[tokio::test]
 async fn task_details_public_task() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let resp = app
         .server
@@ -468,7 +472,7 @@ async fn seed_subm_file(app: &TestApp) -> (i64, i64) {
 
 #[tokio::test]
 async fn subm_file_get_and_delete() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let (file_id, eval_id) = seed_subm_file(&app).await;
 
@@ -477,7 +481,7 @@ async fn subm_file_get_and_delete() {
         .auth_get(&format!("/submFiles/{file_id}"), false)
         .await;
     resp.assert_status_ok();
-    assert_eq!(resp.as_bytes(), b"submission");
+    assert_eq!(resp.as_bytes().as_ref(), b"submission");
 
     // org can download too
     app.auth_get(&format!("/submFiles/{file_id}"), true)
@@ -518,7 +522,7 @@ async fn subm_file_get_and_delete() {
 
 #[tokio::test]
 async fn subm_file_delete_after_deadline_refused() {
-    let _guard = DATA_DIR_LOCK.lock().unwrap();
+    let _guard = DATA_DIR_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let app = TestApp::new().await;
     let (file_id, _) = seed_subm_file(&app).await;
     // put the task deadline in the past

@@ -116,7 +116,7 @@ fn file_response(path: &std::path::Path) -> ApiResult<Response> {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct ContentQuery {
+pub struct ContentQuery {
     path: Option<String>,
 }
 
@@ -255,7 +255,7 @@ pub async fn create_content(
 /// `DELETE /content?path=…` — delete a file and prune newly-empty parent
 /// directories (up to, but not including, `data/content`). Org only.
 pub async fn delete_content(
-    State(state): State<SharedState>,
+    State(_state): State<SharedState>,
     user: AuthUser,
     Query(q): Query<ContentQuery>,
 ) -> ApiResult<Response> {
@@ -308,7 +308,7 @@ pub async fn delete_content(
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct ImageQuery {
+pub struct ImageQuery {
     file: Option<String>,
     module: Option<String>,
     user: Option<String>,
@@ -408,7 +408,7 @@ fn file_response_checked(path: &std::path::Path) -> ApiResult<Response> {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct TaskContentQuery {
+pub struct TaskContentQuery {
     path: Option<String>,
 }
 
@@ -683,10 +683,10 @@ async fn task_status(db: &sqlx::SqlitePool, task: &TaskDetailsRow, user: &AuthUs
 /// `util/task.py::solution_public`).
 fn solution_public(status: &str, task: &TaskDetailsRow, user: &AuthUser) -> bool {
     let role = user.role.as_deref().unwrap_or("");
-    ((task.time_deadline.is_some()
+    (task.time_deadline.is_some()
         && (status == "done"
             || task.time_deadline.map(|dl| dl < Utc::now().naive_utc()).unwrap_or(false)))
-        || matches!(role, "org" | "admin" | "tester"))
+        || matches!(role, "org" | "admin" | "tester")
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -1066,7 +1066,7 @@ pub async fn get_task_details(
 
     // per-module max points + evaluator for this user
     let scores: Vec<(i64, Option<f64>, Option<i64>)> = sqlx::query_as(
-        "SELECT m.id, MAX(e.points), MAX(e.evaluator)
+        "SELECT m.id, MAX(CAST(e.points AS REAL)), MAX(e.evaluator)
          FROM modules m
          JOIN evaluations e ON e.module = m.id
          WHERE m.task = ? AND e.user = ?
@@ -1079,7 +1079,7 @@ pub async fn get_task_details(
 
     // best scores across participants
     let best_scores: Vec<(i64, f64)> = sqlx::query_as(
-        "SELECT u.id, SUM(pm.points) FROM
+        "SELECT u.id, CAST(SUM(pm.points) AS REAL) FROM
            (SELECT e.user AS user_id, MAX(e.points) AS points
             FROM evaluations e
             JOIN modules m ON m.id = e.module
@@ -1110,7 +1110,8 @@ pub async fn get_task_details(
 
     // modules
     let modules: Vec<ModuleRow> = sqlx::query_as(
-        "SELECT id, task, type, name, description, autocorrect, max_points, data
+        "SELECT id, task, type, name, description, autocorrect,
+                CAST(max_points AS REAL) AS max_points, data
          FROM modules WHERE task = ? ORDER BY \"order\", id",
     )
     .bind(task.id)
