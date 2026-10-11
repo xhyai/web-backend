@@ -317,8 +317,9 @@ fn one_ksi_pseudocode(inner: &str) -> String {
         }
     }
     source = lines.join("\n");
-    source = source.replace("<ksi-pseudocode>", "<div style='padding-left:20px'>\n");
-    source = source.replace("</ksi-pseudocode>", "</div>");
+    // NOTE: the `<ksi-pseudocode>` → padded-div rewriting is done by the
+    // caller `ksi_pseudocode` (Python's `one_ksi_pseudocode` does it on the
+    // whole regex match including the tags).
     // Force pandoc to put every line in its own paragraph.
     source = source.replace('\n', "\n\n");
     source = source.replace('\t', "&emsp;").replace("    ", "&emsp;");
@@ -344,7 +345,11 @@ pub fn ksi_pseudocode(source: &str) -> String {
         }
         let inner = &rest[after_open..end];
         out.push_str(&rest[..start]);
+        // Python's one_ksi_pseudocode receives the whole match including the
+        // tags and rewrites them into the padded div; replicate that here.
+        out.push_str("<div style='padding-left:20px'>\n");
         out.push_str(&one_ksi_pseudocode(inner));
+        out.push_str("</div>");
         rest = &rest[end + "</ksi-pseudocode>".len()..];
     }
     out.push_str(rest);
@@ -1929,8 +1934,9 @@ mod tests {
 
     #[test]
     fn quiz_head_matched() {
-        assert_eq!(match_quiz_head("## Kolik je 1+1? (r)"), Some(("Kolik je 1+1?", 'r')));
-        assert_eq!(match_quiz_head("## Vyber (c) moznosti"), Some(("Vyber", 'c')));
+        // Python's `^##(.*?) \(([rc])\)` keeps the space after `##`.
+        assert_eq!(match_quiz_head("## Kolik je 1+1? (r)"), Some((" Kolik je 1+1?", 'r')));
+        assert_eq!(match_quiz_head("## Vyber (c) moznosti"), Some((" Vyber", 'c')));
         assert_eq!(match_quiz_head("# Neni otazka"), None);
     }
 
@@ -1994,11 +2000,11 @@ mod tests {
 
         let correcting = std::fs::read_to_string(dst.join("correcting.svg")).unwrap();
         assert!(correcting.starts_with("<?xml"), "{correcting}");
-        assert!(!correcting.contains("display=\"none\""), "{correcting}");
-        assert!(correcting.contains("id=\"correcting\""), "{correcting}");
-        // The other badge stays hidden in this variant.
-        let done = std::fs::read_to_string(dst.join("done.svg")).unwrap();
-        assert!(!done.contains("id=\"done\" display=\"none\""), "{done}");
+        // Only this variant's badge is un-hidden; the other stays hidden
+        // (mirrors Python parsing base.svg fresh per variant).
+        assert!(correcting.contains("<g id=\"correcting\">"), "{correcting}");
+        assert!(!correcting.contains("<g id=\"correcting\" display=\"none\">"), "{correcting}");
+        assert!(correcting.contains("<g id=\"done\" display=\"none\">"), "{correcting}");
 
         std::fs::remove_dir_all(&dir).ok();
     }

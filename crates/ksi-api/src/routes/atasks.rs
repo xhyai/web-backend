@@ -107,7 +107,6 @@ struct AdminTaskRow {
 
 #[derive(Debug, sqlx::FromRow)]
 struct WaveRow {
-    id: i64,
     year: i64,
     garant: i64,
     time_published: Option<NaiveDateTime>,
@@ -155,7 +154,7 @@ async fn get_task_row(db: &SqlitePool, id: i64) -> ApiResult<AdminTaskRow> {
 }
 
 async fn get_wave_row(db: &SqlitePool, id: i64) -> ApiResult<WaveRow> {
-    sqlx::query_as("SELECT id, year, garant, time_published FROM waves WHERE id = ?")
+    sqlx::query_as("SELECT year, garant, time_published FROM waves WHERE id = ?")
         .bind(id)
         .fetch_optional(db)
         .await?
@@ -436,6 +435,7 @@ pub async fn create_atask(
     )
     .bind(data.wave)
     .bind(&data.title)
+    .bind(data.author)
     .bind(&data.git_path)
     .bind(&data.git_branch)
     .bind(git_commit)
