@@ -1110,16 +1110,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "ksi-backend"
+name = "ksi-api"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "axum",
  "axum-test",
  "bcrypt",
  "chrono",
  "jsonschema",
- "mime",
+ "ksi-auth",
+ "ksi-db",
+ "ksi-models",
  "serde",
  "serde_json",
  "sqlx",
@@ -1127,9 +1128,50 @@ dependencies = [
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tracing",
- "tracing-subscriber",
  "uuid",
  "zip",
+]
+
+[[package]]
+name = "ksi-auth"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bcrypt",
+ "chrono",
+ "serde",
+ "sqlx",
+ "uuid",
+]
+
+[[package]]
+name = "ksi-backend"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "ksi-api",
+ "ksi-db",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "ksi-db"
+version = "0.1.0"
+dependencies = [
+ "sqlx",
+]
+
+[[package]]
+name = "ksi-models"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "sqlx",
 ]
 
 [[package]]
