@@ -1,22 +1,25 @@
-//! Code-execution sandbox built on top of the `isolate` binary.
+//! Code-execution sandbox built on Bubblewrap (`bwrap`), Cauldron-style.
 //!
-//! This is a port of the Python backend's `util/programming.py`: it finds a
-//! free box id under `/tmp/box/`, enforces a limit on concurrently running
-//! boxes, executes merged participant code inside the sandbox with resource
-//! limits, runs the module's check script against the produced output, and
-//! cleans the box up afterwards.
+//! This is a port of the Python backend's `util/programming.py`, with the
+//! sandboxing approach taken from the MUNI thesis "Automated Evaluation of
+//! Student Submissions in Computer Science Correspondence Seminar"
+//! (Cauldron): instead of the `isolate` tool it uses `bwrap` with Linux
+//! namespaces, dropped capabilities, `setrlimit(2)` resource limits and
+//! size-limited tmpfs.
 //!
-//! If the `isolate` binary is not installed, every operation fails with
+//! If the `bwrap` binary is not installed, every operation fails with
 //! [`SandboxError::NotAvailable`] instead of crashing — callers map that to
 //! an HTTP 503.
 
+pub mod bwrap;
+pub mod common;
 pub mod error;
-pub mod isolate;
 pub mod programming;
 pub mod reporter;
 
+pub use bwrap::{BwrapLimits, BwrapSandbox};
+pub use common::{parse_size, parse_timespan, BoxId, RunConfig, RunLimits, RunOutcome, Sandbox};
 pub use error::SandboxError;
-pub use isolate::{parse_size, parse_timespan, BoxId, IsolateSandbox, RunConfig, RunLimits, RunOutcome, Sandbox};
 pub use programming::{
     evaluate, run_code, EvalOutcome, ExecOutcome, ProgramSpec,
     RunContext, RunType,

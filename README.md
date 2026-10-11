@@ -13,7 +13,7 @@ organized as a multi-crate monorepo.
 | `ksi-db` | Connection pool + embedded SQL migrations |
 | `ksi-auth` | Token lookup, password hashing, axum `AuthUser` extractor |
 | `ksi-api` | HTTP routes, error types, `AppState`, integration tests |
-| `ksi-sandbox` | Code-execution sandbox: `Sandbox` trait + `IsolateSandbox` (shells out to the [`isolate`](https://github.com/ioi/isolate) binary), merge/check-script pipeline, honeypot cheat detection |
+| `ksi-sandbox` | Code-execution sandbox: `Sandbox` trait + `BwrapSandbox` (Bubblewrap, Cauldron-style per the [MUNI thesis](https://is.muni.cz/th/daghp/)), merge/check-script pipeline, honeypot cheat detection |
 | `ksi-backend` | The binary (wires everything together) |
 
 Dependency versions are centralized in the workspace root `Cargo.toml`
@@ -96,19 +96,23 @@ corrections workflow, task deploy, e-mail, diplomas.
 
 Programming-module evaluation (`POST /modules/{id}/submit` with
 `autocorrect`, `POST /runCode/{moduleId}/submit`) runs participant code
-through the [`isolate`](https://github.com/ioi/isolate) sandbox, exactly
-like the Python backend did: a free box id is picked under `/tmp/box/`
-(at most 3 concurrent boxes), code is merged with the module's merge
-script, executed with the module's resource limits, and checked with the
-module's check script.
+through a [Bubblewrap](https://github.com/containers/bubblewrap)-based
+sandbox, following the design from the MUNI bachelor's thesis
+"Automated Evaluation of Student Submissions in Computer Science
+Correspondence Seminar" ([thesis](https://is.muni.cz/th/daghp/),
+Cauldron): Linux namespaces (user, mount, PID, IPC, UTS, cgroup, network),
+all capabilities dropped, resource limits via `setrlimit(2)`, size-limited
+tmpfs, and read-only bind mounts. A free box id is picked under
+`/tmp/ksi-bwrap/` (at most 3 concurrent boxes), code is merged with the
+module's merge script, executed with the module's resource limits, and
+checked with the module's check script.
 
-**The `isolate` binary must be installed for code execution to work.**
+**The `bwrap` binary must be installed for code execution to work.**
 When it is missing, the sandbox returns a clean "not available" error
 and the API responds with `503 Service Unavailable` instead of crashing.
 Everything else (quiz/sortable/text evaluation, file uploads, module
-details) works without it. The `Dockerfile` does not install `isolate`
-yet — add it there if you deploy evaluation (it needs privileges to
-set up namespaces/cgroups; see the isolate documentation).
+details) works without it. The `Dockerfile` does not install `bwrap`
+yet — add it there if you deploy evaluation.
 
 ### Compatibility notes
 

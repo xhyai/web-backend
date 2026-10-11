@@ -21,7 +21,7 @@ use sha2::{Digest, Sha256};
 use ksi_auth::AuthUser;
 use ksi_models::{ModuleDetailJson, SubmittedFileJson};
 use ksi_sandbox::{
-    evaluate as sandbox_evaluate, run_code as sandbox_run_code, IsolateSandbox,
+    evaluate as sandbox_evaluate, run_code as sandbox_run_code, BwrapSandbox,
     ProgramSpec, Reporter, RunContext, RunType, SandboxError,
 };
 
@@ -1016,7 +1016,7 @@ async fn submit_programming(
         }
     };
 
-    let sandbox = IsolateSandbox::new();
+    let sandbox = BwrapSandbox::new();
     let ctx = RunContext {
         module_id: module.id,
         user_id,
@@ -1453,7 +1453,7 @@ async fn run_code_inner(
         SandboxError::UnsupportedVersion("unsupported".into())
     })?;
 
-    let sandbox = IsolateSandbox::new();
+    let sandbox = BwrapSandbox::new();
     let ctx = RunContext {
         module_id: module.id,
         user_id,

@@ -16,7 +16,7 @@ use std::time::Duration;
 use tokio::process::Command;
 
 use crate::error::SandboxError;
-use crate::isolate::{
+use crate::common::{
     box_content_dir, RunConfig, RunLimits, RunOutcome, Sandbox,
 };
 use crate::reporter::Reporter;
@@ -61,6 +61,8 @@ pub struct ProgramSpec {
     pub stdin: PathBuf,
     pub check_script: PathBuf,
     pub limits: RunLimits,
+    /// Raw `programming.limits` map for backends needing extra fields.
+    pub limits_raw: serde_json::Map<String, serde_json::Value>,
 }
 
 impl ProgramSpec {
@@ -90,11 +92,12 @@ impl ProgramSpec {
                 .ok_or_else(|| SandboxError::MissingFile(format!("`programming.{key}` missing")))
         };
 
-        let limits = prog
+        let limits_map = prog
             .get("limits")
             .and_then(|v| v.as_object())
-            .map(RunLimits::from_map)
-            .unwrap_or_else(|| RunLimits::from_map(&serde_json::Map::new()));
+            .cloned()
+            .unwrap_or_default();
+        let limits = RunLimits::from_map(&limits_map);
 
         Ok(Self {
             default_code: prog
@@ -106,6 +109,7 @@ impl ProgramSpec {
             stdin: get_path("stdin")?,
             check_script: get_path("check_script")?,
             limits,
+            limits_raw: limits_map,
         })
     }
 }
@@ -297,7 +301,7 @@ pub async fn run_code<S: Sandbox>(
     })
 }
 
-fn sandbox_box_dir<S: Sandbox>(sandbox: &S, box_id: &crate::isolate::BoxId) -> PathBuf {
+fn sandbox_box_dir<S: Sandbox>(sandbox: &S, box_id: &crate::common::BoxId) -> PathBuf {
     sandbox.box_dir(box_id)
 }
 
@@ -311,7 +315,7 @@ struct MergedRun {
 /// Merge participant code and execute it in the box. Mirrors Python's `_run`.
 async fn run_merged<S: Sandbox>(
     sandbox: &S,
-    box_id: &crate::isolate::BoxId,
+    box_id: &crate::common::BoxId,
     spec: &ProgramSpec,
     ctx: &RunContext,
     code: &str,
@@ -351,6 +355,7 @@ async fn run_merged<S: Sandbox>(
     reporter.push("Executing code\n");
     let cfg = RunConfig {
         limits: spec.limits.clone(),
+        limits_extra: spec.limits_raw.clone(),
         stdin_path: spec.stdin.clone(),
         run_path: "/box/run".to_string(),
         interpreter,
@@ -885,7 +890,7 @@ async fn check_output(
 /// `<store_base>/module_<id>/user_<id>/`, like Python's `store_exec`.
 async fn store_exec<S: Sandbox>(
     _sandbox: &S,
-    box_id: &crate::isolate::BoxId,
+    box_id: &crate::common::BoxId,
     ctx: &RunContext,
     reporter: &mut Reporter,
 ) -> Result<(), SandboxError> {

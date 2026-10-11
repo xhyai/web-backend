@@ -25,10 +25,10 @@ COPY crates ./crates
 RUN cargo build --release
 
 FROM debian:bookworm-slim
-# NOTE: install the `isolate` sandbox binary here if this image should
-# evaluate programming modules (see README "Code execution sandbox").
-# It needs privileges for namespaces/cgroups, so a plain apt install is
-# usually not enough on its own — see https://github.com/ioi/isolate.
+# NOTE: install the `bwrap` sandbox binary here if this image should
+# evaluate programming modules (see README "Code execution sandbox"):
+# `apt-get install -y bubblewrap`. bwrap runs unprivileged via user
+# namespaces (https://github.com/containers/bubblewrap).
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/ksi-backend /usr/local/bin/ksi-backend
 
