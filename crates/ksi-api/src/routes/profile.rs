@@ -165,7 +165,7 @@ async fn profile_tasks(
 
     // Per-task sum of best-per-module points (any modules, like Python).
     let points: Vec<(i64, Option<f64>)> = sqlx::query_as(
-        "SELECT m.task, SUM(pm.pts)
+        "SELECT m.task, CAST(SUM(pm.pts) AS REAL)
          FROM (SELECT e.module AS module, MAX(e.points) AS pts
                FROM evaluations e WHERE e.user = ? GROUP BY e.module) pm
          JOIN modules m ON m.id = pm.module

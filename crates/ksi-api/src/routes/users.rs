@@ -69,7 +69,7 @@ async fn load_agg(
     // (user, total_score over evaluation_public modules, cheat) — mirrors
     // util/user.py::sum_points.
     let rows: Vec<(i64, Option<f64>, Option<i64>)> = sqlx::query_as(&format!(
-        "SELECT pm.user, SUM(pm.pts), MAX(pm.cheat)
+        "SELECT pm.user, CAST(SUM(pm.pts) AS REAL), MAX(pm.cheat)
          FROM (SELECT e.user AS user, MAX(e.points) AS pts, MAX(e.cheat) AS cheat
                FROM evaluations e
                JOIN modules m ON m.id = e.module
@@ -429,6 +429,12 @@ pub async fn delete_user(
     }
 
     sqlx::query("DELETE FROM profiles WHERE user_id = ?")
+        .bind(id)
+        .execute(&state.db)
+        .await?;
+    // Sessions must die with the account (their FK would otherwise block
+    // the delete; Python hit a bare 500 here).
+    sqlx::query("DELETE FROM oauth2_tokens WHERE user = ?")
         .bind(id)
         .execute(&state.db)
         .await?;
