@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-ksi-models.workspace = true
+axum.workspace = true
 sqlx.workspace = true
 chrono.workspace = true
 bcrypt.workspace = true

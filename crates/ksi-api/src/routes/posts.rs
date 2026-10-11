@@ -26,7 +26,7 @@ pub struct PostResponse {
 
 pub async fn get_post(
     State(state): State<SharedState>,
-    user: AuthUser,
+    _user: AuthUser,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<PostResponse>> {
     let post: Option<Post> = sqlx::query_as(
@@ -63,7 +63,7 @@ pub struct NewPost {
 /// resolved post reopens it.
 pub async fn create_post(
     State(state): State<SharedState>,
-    user: AuthUser,
+    _user: AuthUser,
     Json(body): Json<CreatePostBody>,
 ) -> ApiResult<Json<PostResponse>> {
     if !user.is_logged_in() {
@@ -145,7 +145,7 @@ pub async fn create_post(
 /// `POST /posts/{id}/resolve` — manually mark a post resolved (org only).
 pub async fn resolve_post(
     State(state): State<SharedState>,
-    user: AuthUser,
+    _user: AuthUser,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<PostResponse>> {
     if !user.is_logged_in() || !user.is_org() {
@@ -180,7 +180,7 @@ pub async fn resolve_post(
 /// `DELETE /posts/{id}/resolve` — manually reopen a post (org only).
 pub async fn unresolve_post(
     State(state): State<SharedState>,
-    user: AuthUser,
+    _user: AuthUser,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<PostResponse>> {
     if !user.is_logged_in() || !user.is_org() {

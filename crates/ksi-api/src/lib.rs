@@ -1,18 +1,11 @@
-pub mod auth;
 pub mod config;
 pub mod error;
 pub mod routes;
 
 use std::sync::Arc;
 
-use axum::{
-    async_trait,
-    extract::FromRequestParts,
-    http::{header, request::Parts, StatusCode},
-    Router,
-};
-
-pub use ksi_auth::AuthUser;
+use axum::Router;
+use ksi_auth::{AuthUser, TokenLookup};
 
 pub struct AppState {
     pub db: sqlx::SqlitePool,
@@ -20,6 +13,13 @@ pub struct AppState {
 }
 
 pub type SharedState = Arc<AppState>;
+
+#[axum::async_trait]
+impl TokenLookup for AppState {
+    async fn lookup_token(&self, token: &str) -> Option<AuthUser> {
+        ksi_auth::lookup_token(&self.db, token).await
+    }
+}
 
 /// Build the axum router. Used by both `main.rs` and integration tests.
 pub async fn create_app(state: SharedState) -> Router {
@@ -39,30 +39,4 @@ pub async fn create_app(state: SharedState) -> Router {
     }
 
     router
-}
-
-#[async_trait]
-impl FromRequestParts<SharedState> for AuthUser {
-    type Rejection = (StatusCode, &'static str);
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &SharedState,
-    ) -> Result<Self, Self::Rejection> {
-        let auth = parts
-            .headers
-            .get(header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("");
-
-        // `Bearer <token>` — Python takes the last whitespace-separated part.
-        let token = auth.split_whitespace().last().unwrap_or("");
-        if token.is_empty() {
-            return Ok(AuthUser::anonymous());
-        }
-
-        Ok(ksi_auth::lookup_token(&state.db, token)
-            .await
-            .unwrap_or_else(AuthUser::anonymous))
-    }
 }

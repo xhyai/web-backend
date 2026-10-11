@@ -1,8 +1,15 @@
-//! Authentication primitives: token lookup, password hashing, auth JSON shapes.
+//! Authentication primitives: [`AuthUser`], token lookup, password hashing,
+//! and the axum extractor that turns `Authorization: Bearer …` into an
+//! [`AuthUser`].
 //!
-//! This crate is intentionally web-framework free — the axum extractor that
-//! turns `Authorization: Bearer …` into an [`AuthUser`] lives in `ksi-api`.
+//! The extractor is generic over [`TokenLookup`], which the web layer
+//! (`ksi-api`) implements for its shared state — no dependency cycle.
 
+use axum::{
+    async_trait,
+    extract::FromRequestParts,
+    http::{header, request::Parts, StatusCode},
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -35,6 +42,48 @@ impl AuthUser {
 
     pub fn is_tester(&self) -> bool {
         self.role.as_deref() == Some("tester")
+    }
+}
+
+/// Implemented by the web layer's shared state so the extractor below can
+/// resolve tokens without `ksi-auth` depending on `ksi-api`.
+#[async_trait]
+pub trait TokenLookup: Send + Sync {
+    async fn lookup_token(&self, token: &str) -> Option<AuthUser>;
+}
+
+// Blanket impl so `Arc<AppState>` works as axum state.
+#[async_trait]
+impl<T: TokenLookup> TokenLookup for std::sync::Arc<T> {
+    async fn lookup_token(&self, token: &str) -> Option<AuthUser> {
+        (**self).lookup_token(token).await
+    }
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for AuthUser
+where
+    S: TokenLookup + Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        // `Bearer <token>` — Python takes the last whitespace-separated part.
+        let token = auth.split_whitespace().last().unwrap_or("");
+        if token.is_empty() {
+            return Ok(AuthUser::anonymous());
+        }
+
+        Ok(state
+            .lookup_token(token)
+            .await
+            .unwrap_or_else(AuthUser::anonymous))
     }
 }
 

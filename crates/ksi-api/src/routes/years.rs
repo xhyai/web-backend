@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use ksi_auth::AuthUser;
 use crate::{error::{ApiError, ApiResult}, SharedState};
-use ksi_models::{Wave, WaveJson, Year, YearJson};
+use ksi_models::{Year, YearJson};
 
 /// Sum of max_points and task count for a year, considering only waves
 /// whose `time_published` is not in the future (mirrors the #225 fix:

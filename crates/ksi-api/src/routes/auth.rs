@@ -2,7 +2,7 @@ use axum::{extract::State, Json};
 use chrono::{Duration, Utc};
 
 use ksi_auth::{AuthRequest, AuthResponse, AuthUser};
-use crate::{auth::{AuthRequest, AuthResponse, AuthUser}, error::{ApiError, ApiResult}, SharedState};
+use crate::{error::{ApiError, ApiResult}, SharedState};
 
 fn new_token() -> String {
     uuid::Uuid::new_v4().simple().to_string() + &uuid::Uuid::new_v4().simple().to_string()[..8]

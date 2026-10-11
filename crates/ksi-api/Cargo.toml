@@ -23,6 +23,7 @@ uuid.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
+ksi-db.workspace = true
 axum-test = "16"
 tokio.workspace = true
 serde_json.workspace = true

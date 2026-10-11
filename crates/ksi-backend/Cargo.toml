@@ -1,0 +1,19 @@
+[package]
+name = "ksi-backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ksi-backend"
+path = "src/main.rs"
+
+[dependencies]
+ksi-api.workspace = true
+ksi-db.workspace = true
+axum.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow.workspace = true
