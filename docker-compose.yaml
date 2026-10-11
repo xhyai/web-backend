@@ -1,42 +1,18 @@
-version: '3.8'
-
 services:
   ksi-be:
     build:
       context: .
-      dockerfile: .docker/Dockerfile
-    image: fi0ksi/ksi-be
+      dockerfile: Dockerfile
+    image: fi0ksi/ksi-be-rust
     ports:
       - "3030:3030"
     volumes:
-      - ksi-backend-data:/opt/data
-      - ksi-backend-db:/opt/database #  Not needed if not using SQLite as the database
-      - ./.docker/data/seminar.git:/opt/seminar.git  # Not needed if SEMINAR_GIT_URL is set to value other than ::local::
+      - ksi-backend-db:/var/ksi-be
     environment:
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-AGE-SECRET-KEY-1TLU9YP9V55UDN4LE9Q0QYDH6ZXDA2JWRCZTHQTWPTYV7U800PFFS3PDNS9} # Change this to a secure key for production use
-      - SEMINAR_GIT_URL=${SEMINAR_GIT_URL:-::local::}  #  If set to value other than ::local::, clones seminar repository from this origin instead of creating a blank one
-      - SQL_ALCHEMY_URI=${SQL_ALCHEMY_URI:-sqlite:////var/ksi-be/db.sqlite} # If set, uses this SQLAlchemy URI instead of the default SQLite database
+      - LISTEN_ADDR=0.0.0.0:3030
+      - DATABASE_URL=sqlite:///var/ksi-be/db.sqlite
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
     container_name: ksi-be
-    devices:
-      - /dev/fuse:/dev/fuse
-    cap_add:
-      - SYS_ADMIN
-    privileged: true
-    security_opt:
-      - apparmor:unconfined
-    entrypoint: ["/bin/bash", "./.docker/entrypoint.sh"]
-  ksi-fe-dev:
-    container_name: ksi-fe-local
-    image: fi0ksi/ksi-fe-local
-    ports:
-      - "4201:80"
-  ksi-fe-old-dev:
-    container_name: ksi-fe-old-dev
-    image: fi0ksi/ksi-fe-old-local
-    ports:
-      - "8080:80"
-
 
 volumes:
-    ksi-backend-data:
-    ksi-backend-db:
+  ksi-backend-db:
