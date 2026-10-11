@@ -185,6 +185,10 @@ pub struct RunOutcome {
 }
 
 /// Sandbox lifecycle: initialize a box, run code in it, clean it up.
+///
+/// Uses native `async fn` in the trait (rather than `async_trait`) since the
+/// toolchain supports it; the lint below is silenced deliberately.
+#[allow(async_fn_in_trait)]
 pub trait Sandbox: Send + Sync {
     /// Host path of the box directory.
     fn box_dir(&self, box_id: &BoxId) -> PathBuf;

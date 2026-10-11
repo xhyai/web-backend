@@ -9,9 +9,10 @@ COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates/ksi-models/Cargo.toml crates/ksi-models/
 COPY crates/ksi-db/Cargo.toml crates/ksi-db/
 COPY crates/ksi-auth/Cargo.toml crates/ksi-auth/
+COPY crates/ksi-sandbox/Cargo.toml crates/ksi-sandbox/
 COPY crates/ksi-api/Cargo.toml crates/ksi-api/
 COPY crates/ksi-backend/Cargo.toml crates/ksi-backend/
-RUN for c in ksi-models ksi-db ksi-auth ksi-api; do \
+RUN for c in ksi-models ksi-db ksi-auth ksi-sandbox ksi-api; do \
       mkdir -p crates/$c/src && touch crates/$c/src/lib.rs; \
     done && \
     mkdir -p crates/ksi-backend/src && \
@@ -24,6 +25,10 @@ COPY crates ./crates
 RUN cargo build --release
 
 FROM debian:bookworm-slim
+# NOTE: install the `isolate` sandbox binary here if this image should
+# evaluate programming modules (see README "Code execution sandbox").
+# It needs privileges for namespaces/cgroups, so a plain apt install is
+# usually not enough on its own — see https://github.com/ioi/isolate.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/ksi-backend /usr/local/bin/ksi-backend
 

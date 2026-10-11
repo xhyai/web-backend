@@ -13,6 +13,7 @@ organized as a multi-crate monorepo.
 | `ksi-db` | Connection pool + embedded SQL migrations |
 | `ksi-auth` | Token lookup, password hashing, axum `AuthUser` extractor |
 | `ksi-api` | HTTP routes, error types, `AppState`, integration tests |
+| `ksi-sandbox` | Code-execution sandbox: `Sandbox` trait + `IsolateSandbox` (shells out to the [`isolate`](https://github.com/ioi/isolate) binary), merge/check-script pipeline, honeypot cheat detection |
 | `ksi-backend` | The binary (wires everything together) |
 
 Dependency versions are centralized in the workspace root `Cargo.toml`
@@ -48,6 +49,13 @@ docker compose up --build
 | `LISTEN_ADDR` | `127.0.0.1:3030` | Address to listen on |
 | `DATABASE_URL` | `sqlite://ksi.db` | Database URL (`sqlite://…` or `sqlite::memory:`) |
 | `CORS_ORIGIN` | _(none)_ | Value for `Access-Control-Allow-Origin` |
+| `KSI_SALT` | _(none)_ | Salt for the `edulint_source_id` user hash |
+| `KSI_SEMINAR_NAME_SHORT` | `KSI` | Seminar short name in `edulint_source_id` |
+| `KSI_BOX_PREFIX` | `1` | Sandbox box-id prefix (change when several backends share a host) |
+| `KSI_MAX_CONCURRENT_EXEC` | `3` | Max concurrently running sandbox boxes |
+| `KSI_SUBMISSIONS_DIR` | `data/submissions` | Where uploaded solution files are stored |
+| `KSI_MODULE_LIB_DIR` | `data/module_lib` | Module library passed to merge/check scripts |
+| `KSI_EXEC_STORE_DIR` | `data/exec` | Where finished sandbox boxes are archived |
 
 The database schema is created automatically from `crates/ksi-db/migrations/`
 on startup, so an existing Python-backend database works as-is.
@@ -78,10 +86,29 @@ OpenAPI spec.
 | Auth | `POST /auth`, `GET /logout` |
 | Posts | `POST /posts`, `GET /posts/{id}`, `POST`/`DELETE /posts/{id}/resolve` |
 | Threads | `GET /threads`, `GET /threads/{id}`, `GET /threadDetails/{id}` |
+| Modules | `GET /modules/{id}`, `POST /modules/{id}/submit`, `POST /modules/{id}/submitFiles`, `POST /runCode/{moduleId}/submit` |
 | Admin | `GET /admin/subm/task/{id}` |
 
-Not yet ported: module submission/evaluation, user profiles, registrations,
+Not yet ported: user profiles, registrations,
 corrections workflow, task deploy, e-mail, diplomas.
+
+### Code execution sandbox
+
+Programming-module evaluation (`POST /modules/{id}/submit` with
+`autocorrect`, `POST /runCode/{moduleId}/submit`) runs participant code
+through the [`isolate`](https://github.com/ioi/isolate) sandbox, exactly
+like the Python backend did: a free box id is picked under `/tmp/box/`
+(at most 3 concurrent boxes), code is merged with the module's merge
+script, executed with the module's resource limits, and checked with the
+module's check script.
+
+**The `isolate` binary must be installed for code execution to work.**
+When it is missing, the sandbox returns a clean "not available" error
+and the API responds with `503 Service Unavailable` instead of crashing.
+Everything else (quiz/sortable/text evaluation, file uploads, module
+details) works without it. The `Dockerfile` does not install `isolate`
+yet — add it there if you deploy evaluation (it needs privileges to
+set up namespaces/cgroups; see the isolate documentation).
 
 ### Compatibility notes
 

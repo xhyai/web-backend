@@ -1,8 +1,21 @@
 mod common;
 
-use axum_test::multipart::{MultipartForm, Part};
+use std::sync::Mutex;
+
 use common::{assert_swagger_valid, TestApp};
 use serde_json::{json, Value};
+
+/// Serializes the file-upload tests: they share the process-wide
+/// `KSI_SUBMISSIONS_DIR` env var and per-test temp dirs.
+static UPLOAD_LOCK: Mutex<()> = Mutex::new(());
+
+fn temp_submissions_dir() -> (std::sync::MutexGuard<'static, ()>, std::path::PathBuf) {
+    let guard = UPLOAD_LOCK.lock().unwrap();
+    let dir =
+        std::env::temp_dir().join(format!("ksi-test-subm-{}", uuid::Uuid::new_v4().simple()));
+    std::env::set_var("KSI_SUBMISSIONS_DIR", &dir);
+    (guard, dir)
+}
 
 async fn insert_module(app: &TestApp, mtype: &str, data: &str, autocorrect: bool) -> i64 {
     sqlx::query_scalar(
@@ -344,26 +357,53 @@ async fn submit_programming_no_autocorrect_just_records() {
 // POST /modules/{id}/submitFiles
 // ---------------------------------------------------------------------------
 
-fn upload_form(files: &[(&str, &[u8])]) -> MultipartForm {
-    let mut form = MultipartForm::new();
+/// Build a multipart/form-data body manually (axum-test's `MultipartForm`
+/// sends chunked without Content-Length, which the handler rejects with 411).
+fn upload_body(files: &[(&str, &[u8])]) -> (String, Vec<u8>) {
+    let boundary = "KSITESTBOUNDARY42";
+    let mut body = Vec::new();
     for (name, content) in files {
-        form = form.add_part(
-            "file",
-            Part::bytes(content.to_vec())
-                .file_name(*name)
-                .mime_type("application/octet-stream"),
+        body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+        body.extend_from_slice(
+            format!(
+                "Content-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\n\
+                 Content-Type: application/octet-stream\r\n\r\n"
+            )
+            .as_bytes(),
         );
+        body.extend_from_slice(content);
+        body.extend_from_slice(b"\r\n");
     }
-    form
+    body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
+    (
+        format!("multipart/form-data; boundary={boundary}"),
+        body,
+    )
+}
+
+async fn upload_files(
+    app: &TestApp,
+    module_id: i64,
+    org: bool,
+    files: &[(&str, &[u8])],
+) -> axum_test::TestResponse {
+    let token = if org { &app.tokens.0 } else { &app.tokens.1 };
+    let (content_type, body) = upload_body(files);
+    let len = body.len();
+    app.server
+        .post(&format!("/modules/{module_id}/submitFiles"))
+        .add_header("Authorization", format!("Bearer {token}"))
+        .add_header("Content-Type", content_type)
+        .add_header(axum::http::header::CONTENT_LENGTH, len)
+        .bytes(body.into())
+        .await
 }
 
 #[tokio::test]
 async fn submit_files_ok_and_listed() {
+    let (_guard, dir) = temp_submissions_dir();
     let app = TestApp::new().await;
-    let resp = app
-        .auth_post(&format!("/modules/{}/submitFiles", app.ids.module), false)
-        .multipart(upload_form(&[("a.txt", b"hello"), ("b.py", b"print(1)")]))
-        .await;
+    let resp = upload_files(&app, app.ids.module, false, &[("a.txt", b"hello"), ("b.py", b"print(1)")]).await;
     resp.assert_status_ok();
     let body: Value = resp.json();
     assert_swagger_valid("post", "/modules/{modulesId}/submitFiles", 200, &body);
@@ -384,8 +424,7 @@ async fn submit_files_ok_and_listed() {
     assert!(names.contains(&"b.py"));
 
     // re-uploading the same file does not duplicate the DB row
-    app.auth_post(&format!("/modules/{}/submitFiles", app.ids.module), false)
-        .multipart(upload_form(&[("a.txt", b"hello")]))
+    upload_files(&app, app.ids.module, false, &[("a.txt", b"hello")])
         .await
         .assert_status_ok();
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM submitted_files")
@@ -393,41 +432,45 @@ async fn submit_files_ok_and_listed() {
         .await
         .unwrap();
     assert_eq!(count, 2);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[tokio::test]
 async fn submit_files_requires_login() {
+    let (_guard, _dir) = temp_submissions_dir();
     let app = TestApp::new().await;
-    app.server
-        .post(&format!("/modules/{}/submitFiles", app.ids.module))
-        .multipart(upload_form(&[("a.txt", b"x")]))
-        .await
-        .assert_status(axum::http::StatusCode::BAD_REQUEST);
+    let tokenless = {
+        let (ct, body) = upload_body(&[("a.txt", b"x")]);
+        let len = body.len();
+        app.server
+            .post(&format!("/modules/{}/submitFiles", app.ids.module))
+            .add_header("Content-Type", ct)
+            .add_header(axum::http::header::CONTENT_LENGTH, len)
+            .bytes(body.into())
+            .await
+    };
+    tokenless.assert_status(axum::http::StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
 async fn submit_files_too_large_rejected() {
+    let (_guard, _dir) = temp_submissions_dir();
     let app = TestApp::new().await;
     let big = vec![b'x'; 26 * 1024 * 1024];
-    let resp = app
-        .auth_post(&format!("/modules/{}/submitFiles", app.ids.module), false)
-        .multipart(upload_form(&[("big.bin", &big)]))
-        .await;
+    let resp = upload_files(&app, app.ids.module, false, &[("big.bin", &big)]).await;
     resp.assert_status(axum::http::StatusCode::PAYLOAD_TOO_LARGE);
 }
 
 #[tokio::test]
 async fn submit_files_after_deadline_rejected() {
+    let (_guard, _dir) = temp_submissions_dir();
     let app = TestApp::new().await;
     sqlx::query("UPDATE tasks SET time_deadline = datetime('now', '-1 day') WHERE id = ?")
         .bind(app.ids.task)
         .execute(&app.db)
         .await
         .unwrap();
-    let resp = app
-        .auth_post(&format!("/modules/{}/submitFiles", app.ids.module), false)
-        .multipart(upload_form(&[("a.txt", b"x")]))
-        .await;
+    let resp = upload_files(&app, app.ids.module, false, &[("a.txt", b"x")]).await;
     let body: Value = resp.json();
     assert_eq!(body["result"], "error");
 }

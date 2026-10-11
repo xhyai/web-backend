@@ -775,7 +775,7 @@ async fn split_stdout(
 /// Read at most `max` bytes from a file as a lossy string.
 async fn read_capped(path: &Path, max: usize) -> Result<String, SandboxError> {
     use tokio::io::AsyncReadExt;
-    let mut f = match tokio::fs::File::open(path).await {
+    let f = match tokio::fs::File::open(path).await {
         Ok(f) => f,
         Err(_) => return Ok(String::new()),
     };

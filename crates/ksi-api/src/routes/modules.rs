@@ -56,8 +56,8 @@ struct ModuleFull {
 
 async fn module_by_id(db: &sqlx::SqlitePool, id: i64) -> ApiResult<Option<ModuleFull>> {
     Ok(sqlx::query_as::<_, ModuleFull>(
-        "SELECT id, task, type, name, description, max_points, autocorrect,
-                custom, data, submit_ratelimit
+        "SELECT id, task, type, name, description, CAST(max_points AS REAL) AS max_points,
+                autocorrect, custom, data, submit_ratelimit
          FROM modules WHERE id = ?",
     )
     .bind(id)
@@ -776,6 +776,8 @@ async fn eval_text_by_script(
         .stdout(stdout_file)
         .stderr(stderr_file)
         .current_dir(&dir)
+        // mirrors Python: the script runs with a cleared environment
+        .env_clear()
         .env("KSI_USER", user_id.to_string())
         .status()
         .await;
@@ -925,8 +927,8 @@ pub async fn submit_module(
     let ok = result == "ok";
 
     let eval_id: i64 = sqlx::query_scalar(
-        "INSERT INTO evaluations (user, module, points, ok, full_report, time)
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO evaluations (user, module, points, ok, cheat, full_report, time)
+         VALUES (?, ?, ?, ?, 0, ?, ?) RETURNING id",
     )
     .bind(user_id)
     .bind(module.id)
@@ -979,8 +981,8 @@ async fn submit_programming(
         eid
     } else {
         sqlx::query_scalar(
-            "INSERT INTO evaluations (user, module, ok, full_report, time)
-             VALUES (?, ?, 0, '', ?) RETURNING id",
+            "INSERT INTO evaluations (user, module, points, ok, cheat, full_report, time)
+             VALUES (?, ?, 0, 0, 0, '', ?) RETURNING id",
         )
         .bind(user_id)
         .bind(module.id)
@@ -1020,8 +1022,8 @@ async fn submit_programming(
         user_id,
         run_id: evaluation_id,
         run_type: RunType::Eval,
-        module_lib_path: std::path::PathBuf::from("data/module_lib"),
-        store_base: std::path::PathBuf::from("data/exec"),
+        module_lib_path: module_lib_dir(),
+        store_base: exec_store_dir(),
     };
 
     let outcome = match sandbox_evaluate(&sandbox, &spec, &ctx, &code, &mut reporter).await {
@@ -1115,6 +1117,29 @@ async fn finish_programming_eval(
 // ---------------------------------------------------------------------------
 // POST /modules/{id}/submitFiles
 // ---------------------------------------------------------------------------
+
+/// Base directory for uploaded submission files
+/// (Python: `data/submissions/`; overridable via `KSI_SUBMISSIONS_DIR`,
+/// used by tests to stay out of the repo).
+fn submissions_base_dir() -> std::path::PathBuf {
+    std::env::var("KSI_SUBMISSIONS_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("data/submissions"))
+}
+
+/// Backend data directories used by the sandbox pipeline
+/// (Python: `data/module_lib/` and `data/exec/`; overridable for tests).
+fn module_lib_dir() -> std::path::PathBuf {
+    std::env::var("KSI_MODULE_LIB_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("data/module_lib"))
+}
+
+fn exec_store_dir() -> std::path::PathBuf {
+    std::env::var("KSI_EXEC_STORE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("data/exec"))
+}
 
 /// Guess a file's MIME type: content sniffing first (like Python's `magic`),
 /// then the filename extension, defaulting to `application/octet-stream`.
@@ -1217,8 +1242,7 @@ pub async fn submit_files(
         ));
     }
 
-    let dir = std::path::PathBuf::from("data")
-        .join("submissions")
+    let dir = submissions_base_dir()
         .join(format!("module_{}", module.id))
         .join(format!("user_{user_id}"));
     tokio::fs::create_dir_all(&dir).await.map_err(|_| {
@@ -1304,8 +1328,8 @@ async fn report_new_evaluation(
         "{now} : === Uploading files for module id '{module_id}' for task id '{task_id}' ===\n"
     );
     let evaluation_id: i64 = sqlx::query_scalar(
-        "INSERT INTO evaluations (user, module, ok, full_report, time)
-         VALUES (?, ?, 1, ?, ?) RETURNING id",
+        "INSERT INTO evaluations (user, module, points, ok, cheat, full_report, time)
+         VALUES (?, ?, 0, 1, 0, ?, ?) RETURNING id",
     )
     .bind(user_id)
     .bind(module_id)
@@ -1435,8 +1459,8 @@ async fn run_code_inner(
         user_id,
         run_id: execution_id,
         run_type: RunType::Exec,
-        module_lib_path: std::path::PathBuf::from("data/module_lib"),
-        store_base: std::path::PathBuf::from("data/exec"),
+        module_lib_path: module_lib_dir(),
+        store_base: exec_store_dir(),
     };
     sandbox_run_code(&sandbox, &spec, &ctx, code, reporter).await
 }
