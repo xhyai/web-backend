@@ -5,7 +5,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::AchievementJson;
 
 // ---------------------------------------------------------------------------
 // PUT /admin/corrections/{id} request
