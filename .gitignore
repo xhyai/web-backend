@@ -13,4 +13,3 @@ gunicorn_cfg.py
 ksi-py3-venv
 target/
 .venv/
-.demobin/
