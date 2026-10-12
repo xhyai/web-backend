@@ -87,10 +87,20 @@ OpenAPI spec.
 | Posts | `POST /posts`, `GET /posts/{id}`, `POST`/`DELETE /posts/{id}/resolve` |
 | Threads | `GET /threads`, `GET /threads/{id}`, `GET /threadDetails/{id}` |
 | Modules | `GET /modules/{id}`, `POST /modules/{id}/submit`, `POST /modules/{id}/submitFiles`, `POST /runCode/{moduleId}/submit` |
-| Admin | `GET /admin/subm/task/{id}` |
+| Profiles | `GET /profile`, `PUT /profile`, user profile endpoints |
+| Users | User management endpoints |
+| Registration | Registration + forgotten password endpoints |
+| Corrections | Correction workflow endpoints |
+| Task deploy | Task deploy/merge/wave diff endpoints |
+| E-mail | E-mail sending endpoints |
+| Diplomas | Diploma generation endpoints |
+| Achievements | Achievement endpoints |
+| Feedback | Feedback endpoints |
+| Content | Content management endpoints |
+| Images | Image serving endpoints |
+| Admin | `GET /admin/subm/task/{id}`, admin misc endpoints |
 
-Not yet ported: user profiles, registrations,
-corrections workflow, task deploy, e-mail, diplomas.
+All 66 API paths from the [web-backend-swagger](https://github.com/fi-ksi/web-backend-swagger) OpenAPI spec are ported.
 
 ### Code execution sandbox
 
