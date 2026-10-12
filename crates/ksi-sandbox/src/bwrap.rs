@@ -75,11 +75,18 @@ impl BwrapLimits {
     }
 }
 
+/// Platform-specific type for the `resource` argument of `setrlimit(2)`.
+/// On glibc it's `__rlimit_resource_t`; on musl/other targets it's `c_int`.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+type RlimitResource = libc::__rlimit_resource_t;
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+type RlimitResource = libc::c_int;
+
 /// Apply `setrlimit(2)` resource limits. Called in the child process
 /// pre-exec hook (after fork, before exec).
 fn apply_rlimits(limits: &BwrapLimits) {
     unsafe {
-        let set = |resource: libc::__rlimit_resource_t, value: u64| {
+        let set = |resource: RlimitResource, value: u64| {
             let rlim = libc::rlimit {
                 rlim_cur: value as libc::rlim_t,
                 rlim_max: value as libc::rlim_t,
